@@ -14,7 +14,10 @@
  */
 
 var SHEET_ID = '1z3bw3np7cErLM42QE0--gfRYMh-isUxIEK6BovJOdgg';
-var ABA = 'Pedidos';
+/** Nome da aba de destino.
+ *  Deixe '' para usar a PRIMEIRA aba da planilha (a que você já tem aberta).
+ *  Coloque 'Pedidos' para o script criar e usar uma aba separada. */
+var ABA = '';
 var NOTIFICAR = 'xyz905391@gmail.com';
 var MARCA = 'IPTV Tarefas';
 
@@ -33,10 +36,32 @@ var COLUNAS = [
 /* ------------------------------------------------------------------ */
 
 function setup() {
-  var planilha = SpreadsheetApp.openById(SHEET_ID);
-  var aba = planilha.getSheetByName(ABA) || planilha.insertSheet(ABA);
+  var aba = garantirAba(true);
+  Logger.log('Aba "%s" pronta com %s colunas.', ABA, COLUNAS.length);
+  return aba;
+}
 
-  aba.clear();
+/**
+ * Devolve a aba de pedidos, criando e formatando se ela não existir.
+ * Chamada também pelo doPost: assim um pedido nunca se perde por causa
+ * de uma aba ausente, mesmo que setup() nunca tenha sido executado.
+ */
+function garantirAba(reformatar) {
+  var planilha = SpreadsheetApp.openById(SHEET_ID);
+
+  // Sem nome definido: usa a primeira aba da planilha.
+  if (!ABA) {
+    var primeira = planilha.getSheets()[0];
+    if (reformatar) Logger.log('Usando a primeira aba: "%s"', primeira.getName());
+    return primeira;
+  }
+
+  var aba = planilha.getSheetByName(ABA);
+  var nova = !aba;
+  if (nova) aba = planilha.insertSheet(ABA);
+  if (!nova && !reformatar) return aba;
+
+  if (reformatar) aba.clear();
   aba.getRange(1, 1, 1, COLUNAS.length).setValues([COLUNAS]);
 
   var cabecalho = aba.getRange(1, 1, 1, COLUNAS.length);
@@ -53,14 +78,86 @@ function setup() {
   aba.getRange('A2:A').setNumberFormat('dd/mm/yyyy hh:mm');
   aba.getRange('G2:G').setNumberFormat('#,##0.00');
 
-  // Menu suspenso na coluna Status
   var status = SpreadsheetApp.newDataValidation()
     .requireValueInList(['Novo', 'Em contato', 'Pago', 'Entregue', 'Cancelado'], true)
     .setAllowInvalid(false)
     .build();
   aba.getRange('M2:M').setDataValidation(status);
 
-  Logger.log('Aba "%s" pronta com %s colunas.', ABA, COLUNAS.length);
+  return aba;
+}
+
+/** Remove acentos e maiúsculas, para comparar cabeçalhos com segurança. */
+function chave(texto) {
+  return String(texto || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Nomes aceitos para cada campo, em português, francês e inglês.
+ * Assim o script funciona tanto na aba "Pedidos" quanto na planilha
+ * que você já usa nos outros sites.
+ */
+var SINONIMOS = {
+  data:      ['datahora', 'data', 'date'],
+  referencia:['pedido', 'referencia', 'commande', 'reference', 'order'],
+  plano:     ['plano', 'formule', 'formula', 'pack', 'plan'],
+  duracao:   ['duracao', 'duree', 'duration'],
+  bonus:     ['bonus', 'offert', 'oferta'],
+  conexoes:  ['conexoes', 'connexions', 'connections', 'telas'],
+  total:     ['totalr', 'total', 'prix', 'prixe', 'preco', 'price', 'valor', 'montant'],
+  nome:      ['nome', 'nom', 'name', 'cliente', 'client'],
+  telefone:  ['telefone', 'telephone', 'phone', 'whatsapp', 'tel'],
+  pais:      ['pais', 'pays', 'country'],
+  email:     ['email', 'mail', 'ecorreio'],
+  pagamento: ['pagamento', 'paiement', 'payment'],
+  status:    ['status', 'statut', 'estado'],
+  origem:    ['origem', 'origine', 'source', 'site'],
+  obs:       ['observacoes', 'obs', 'notes', 'remarques', 'comentarios']
+};
+
+/** Escreve uma linha respeitando os cabeçalhos existentes na aba. */
+function escreverLinha(aba, valores) {
+  var largura = Math.max(aba.getLastColumn(), 1);
+  var cabecalhos = aba.getRange(1, 1, 1, largura).getValues()[0].map(chave);
+
+  // Aba vazia, sem cabeçalho: cria o padrão do script.
+  if (!cabecalhos.join('')) {
+    aba.getRange(1, 1, 1, COLUNAS.length).setValues([COLUNAS]);
+    aba.setFrozenRows(1);
+    cabecalhos = COLUNAS.map(chave);
+    largura = COLUNAS.length;
+  }
+
+  var linha = new Array(largura).fill('');
+  var usados = 0;
+
+  Object.keys(SINONIMOS).forEach(function (campo) {
+    if (valores[campo] === undefined) return;
+    for (var i = 0; i < cabecalhos.length; i++) {
+      if (SINONIMOS[campo].indexOf(cabecalhos[i]) >= 0) {
+        linha[i] = valores[campo];
+        usados++;
+        return;
+      }
+    }
+  });
+
+  if (!usados) {
+    // Nenhum cabeçalho reconhecido: grava na ordem padrão, sem perder o pedido.
+    Logger.log('Nenhum cabeçalho reconhecido em "%s" — gravando na ordem padrão.', aba.getName());
+    linha = COLUNAS.map(function (c) {
+      var achado = '';
+      Object.keys(SINONIMOS).forEach(function (campo) {
+        if (SINONIMOS[campo].indexOf(chave(c)) >= 0 && valores[campo] !== undefined) achado = valores[campo];
+      });
+      return achado;
+    });
+  }
+
+  aba.appendRow(linha);
+  return usados;
 }
 
 /* ------------------------------------------------------------------ */
@@ -68,7 +165,11 @@ function setup() {
 /* ------------------------------------------------------------------ */
 
 function doGet() {
-  return json({ ok: true, servico: MARCA, aba: ABA });
+  var existe = false;
+  try {
+    existe = !!SpreadsheetApp.openById(SHEET_ID).getSheetByName(ABA);
+  } catch (erro) {}
+  return json({ ok: true, servico: MARCA, aba: ABA, abaExiste: existe });
 }
 
 function doPost(e) {
@@ -87,29 +188,29 @@ function doPost(e) {
     // Armadilha anti-robô: o site envia este campo sempre vazio.
     if (texto(dados.website)) return json({ ok: true, ignorado: true });
 
-    var aba = SpreadsheetApp.openById(SHEET_ID).getSheetByName(ABA);
-    if (!aba) return json({ ok: false, erro: 'aba-inexistente' });
+    var aba = garantirAba(false);
 
     var agora = new Date();
     var referencia = 'IT-' + Utilities.formatDate(agora, 'America/Sao_Paulo', 'yyMMdd-HHmmss');
 
-    aba.appendRow([
-      agora,
-      referencia,
-      texto(dados.plano),
-      texto(dados.duracao),
-      dados.bonus ? '+3 meses grátis' : '—',
-      Number(dados.conexoes) || 1,
-      Number(dados.total) || 0,
-      texto(dados.nome),
-      "'" + texto(dados.telefone),     // apóstrofo: preserva o + e os zeros à esquerda
-      texto(dados.pais),
-      texto(dados.email),
-      texto(dados.pagamento),
-      'Novo',
-      texto(dados.origem) || 'site',
-      texto(dados.observacoes)
-    ]);
+    var usados = escreverLinha(aba, {
+      data: agora,
+      referencia: referencia,
+      plano: texto(dados.plano),
+      duracao: texto(dados.duracao),
+      bonus: dados.bonus ? '+3 meses grátis' : '—',
+      conexoes: Number(dados.conexoes) || 1,
+      total: Number(dados.total) || 0,
+      nome: texto(dados.nome),
+      telefone: "'" + texto(dados.telefone),   // apóstrofo preserva o + e os zeros
+      pais: texto(dados.pais),
+      email: texto(dados.email),
+      pagamento: texto(dados.pagamento),
+      status: 'Novo',
+      origem: texto(dados.origem) || 'site',
+      obs: texto(dados.observacoes)
+    });
+    Logger.log('Linha gravada em "%s" (%s colunas preenchidas).', aba.getName(), usados);
 
     notificar(referencia, dados);
     return json({ ok: true, referencia: referencia });
@@ -196,7 +297,9 @@ function testar() {
       })
     }
   });
-  Logger.log(resposta.getContent());
+  Logger.log('Resposta: %s', resposta.getContent());
+  Logger.log('Planilha: https://docs.google.com/spreadsheets/d/%s', SHEET_ID);
+  Logger.log('E-mails restantes hoje: %s', MailApp.getRemainingDailyQuota());
 }
 
 /**
@@ -212,7 +315,11 @@ function diagnosticar() {
     Logger.log('URL: %s', planilha.getUrl());
     var abas = planilha.getSheets().map(function (a) { return a.getName(); });
     Logger.log('Abas existentes: %s', abas.join(' | '));
-    Logger.log('Aba "%s" existe? %s', ABA, abas.indexOf(ABA) >= 0 ? 'SIM' : 'NÃO — rode setup()');
+    var destino = garantirAba(false);
+    Logger.log('Aba de destino: "%s"', destino.getName());
+    var largura = Math.max(destino.getLastColumn(), 1);
+    Logger.log('Cabeçalhos: %s', destino.getRange(1, 1, 1, largura).getValues()[0].join(' | '));
+    Logger.log('Linhas já preenchidas: %s', destino.getLastRow() - 1);
     Logger.log('E-mail de aviso: %s', NOTIFICAR);
     Logger.log('Cota de e-mails restante hoje: %s', MailApp.getRemainingDailyQuota());
   } catch (erro) {

@@ -248,23 +248,81 @@ function moeda(v) {
 
 function notificar(referencia, d) {
   if (!NOTIFICAR) return;
+
+  var plano = texto(d.plano) + (texto(d.duracao) ? ' · ' + texto(d.duracao) : '') +
+              (d.bonus ? ' · +3 meses grátis' : '');
+  var telefone = texto(d.telefone);
+  var digitos = telefone.replace(/[^0-9]/g, '');
+  var quando = Utilities.formatDate(new Date(), 'America/Sao_Paulo', "dd/MM/yyyy 'às' HH:mm");
+
+  var copiavel = function (valor) {
+    return '<br><span style="display:inline-block;margin-top:6px;padding:5px 9px;border-radius:6px;' +
+      'background:#eef4f1;border:1px solid #d7e3dd;font-family:Consolas,Menlo,monospace;' +
+      'font-size:13px;font-weight:400;color:#12211a;-webkit-user-select:all;user-select:all">' +
+      valor + '</span>';
+  };
+
+  // Cada linha: [rótulo, HTML exibido, texto puro para o corpo simples]
   var linhas = [
-    'Pedido: ' + referencia,
-    'Plano: ' + texto(d.plano) + ' (' + texto(d.duracao) + (d.bonus ? ' + 3 meses grátis' : '') + ')',
-    'Conexões: ' + (Number(d.conexoes) || 1),
-    'Total: ' + moeda(d.total),
-    '',
-    'Nome: ' + texto(d.nome),
-    'Telefone: ' + texto(d.telefone) + (texto(d.pais) ? ' (' + texto(d.pais) + ')' : ''),
-    'E-mail: ' + (texto(d.email) || '—'),
-    'Pagamento: ' + (texto(d.pagamento) || '—'),
-    '',
-    'Planilha: https://docs.google.com/spreadsheets/d/' + SHEET_ID
+    ['Pedido', referencia, referencia],
+    ['Plano', plano, plano],
+    ['Preço', moeda(d.total), moeda(d.total)],
+    ['Conexões', String(Number(d.conexoes) || 1), String(Number(d.conexoes) || 1)],
+    ['Nome', texto(d.nome), texto(d.nome)],
+    ['Telefone',
+      (digitos ? '<a href="tel:' + telefone + '" style="color:#0b7a4b">' + telefone + '</a>' : telefone) +
+      (digitos ? copiavel(digitos) +
+        '<br><span style="font-size:11px;color:#8a9a92">toque e segure (ou clique duas vezes) para copiar</span>' : ''),
+      telefone + (digitos ? '  [' + digitos + ']' : '')],
+    ['E-mail',
+      texto(d.email)
+        ? '<a href="mailto:' + texto(d.email) + '" style="color:#0b7a4b">' + texto(d.email) + '</a>' +
+          copiavel(texto(d.email))
+        : '—',
+      texto(d.email) || '—'],
+    ['Pagamento', texto(d.pagamento) || '—', texto(d.pagamento) || '—'],
+    ['Origem', texto(d.origem) || 'site', texto(d.origem) || 'site'],
+    ['Data', quando, quando]
   ];
+  if (texto(d.observacoes)) linhas.push(['Observações', texto(d.observacoes), texto(d.observacoes)]);
+
+  var celulas = linhas.map(function (l, i) {
+    var fundo = i % 2 ? '#f7faf8' : '#ffffff';
+    return '<tr>' +
+      '<td style="padding:11px 14px;background:' + fundo + ';border:1px solid #e3ebe6;' +
+      'color:#5b6b63;font-size:14px;width:34%">' + l[0] + '</td>' +
+      '<td style="padding:11px 14px;background:' + fundo + ';border:1px solid #e3ebe6;' +
+      'color:#12211a;font-size:14px;font-weight:600">' + l[1] + '</td></tr>';
+  }).join('');
+
+  var botao = digitos
+    ? '<a href="https://wa.me/' + digitos + '" style="display:inline-block;margin-top:22px;' +
+      'padding:13px 24px;border-radius:8px;background:#17b47c;color:#ffffff;' +
+      'font-weight:700;font-size:15px;text-decoration:none">Falar com o cliente no WhatsApp</a>'
+    : '';
+
+  var html =
+    '<div style="font-family:Arial,Helvetica,sans-serif;max-width:640px;margin:0 auto;padding:8px">' +
+      '<h2 style="color:#0b7a4b;font-size:21px;margin:0 0 6px">🛒 Novo pedido — ' + MARCA + '</h2>' +
+      '<p style="color:#5b6b63;font-size:14px;margin:0 0 18px">' +
+        'Recebido pelo popup de pedido do site.</p>' +
+      '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;width:100%">' +
+        celulas +
+      '</table>' +
+      botao +
+      '<p style="color:#8a9a92;font-size:12px;margin:22px 0 0">' +
+        '<a href="https://docs.google.com/spreadsheets/d/' + SHEET_ID + '" ' +
+        'style="color:#8a9a92">Abrir a planilha de pedidos</a></p>' +
+    '</div>';
+
+  var textoSimples = linhas.map(function (l) { return l[0] + ': ' + l[2]; }).join('\n') +
+    (digitos ? '\n\nWhatsApp: https://wa.me/' + digitos : '');
+
   MailApp.sendEmail({
     to: NOTIFICAR,
-    subject: '[' + MARCA + '] Novo pedido ' + referencia + ' — ' + texto(d.nome),
-    body: linhas.join('\n')
+    subject: '🛒 Novo pedido — ' + MARCA + ' — ' + texto(d.plano) + ' (' + moeda(d.total) + ')',
+    body: textoSimples,
+    htmlBody: html
   });
 }
 

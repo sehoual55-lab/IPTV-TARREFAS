@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+Disallow: /termos-de-uso/
+Disallow: /politica-de-privacidade/
+Disallow: /politica-de-reembolso/
+Disallow: /informacoes-legais/
+
+Sitemap: https://iptv-tarefas.online/sitemap.xml

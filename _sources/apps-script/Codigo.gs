@@ -220,3 +220,15 @@ function diagnosticar() {
     Logger.log('Confira se o SHEET_ID está certo e se esta conta tem acesso ao documento.');
   }
 }
+
+/**
+ * Mostra a URL real do App da Web deste projeto, direto da fonte.
+ * Execute e compare com a URL colada em config.js — se forem diferentes,
+ * o site está enviando os pedidos para um endereço que não existe mais.
+ */
+function mostrarUrl() {
+  var servico = ScriptApp.getService();
+  Logger.log('App da Web ativo? %s', servico.isEnabled() ? 'SIM' : 'NÃO — nunca foi implantado');
+  Logger.log('URL real: %s', servico.getUrl());
+  Logger.log('ID do script: %s', ScriptApp.getScriptId());
+}

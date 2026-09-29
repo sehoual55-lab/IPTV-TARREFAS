@@ -24,7 +24,7 @@ window.SITE_CONFIG = {
 
   /* Formas de pagamento oferecidas. É apenas uma preferência informada no
      pedido: nenhum pagamento é processado no site. Liste vazia = bloco escondido. */
-  formasPagamento: ["Cartão", "PayPal"],
+  formasPagamento: ["Cartão"],
 
   /* Mensagem já preenchida ao clicar em "Iniciar conversa". */
   mensagemInicial: "Olá! Vim pelo site e gostaria de informações sobre os planos de IPTV.",

@@ -34,6 +34,7 @@ SHELL = """<!DOCTYPE html>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Sora:wght@700;800&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Sora:wght@700;800&display=swap"></noscript>
 <link rel="stylesheet" href="/assets/css/styles.css">
+<!-- WA-ORDER --><script src="/wa-order.js?v=2"></script>
 </head>
 <body>
 <a class="skip-link" href="#conteudo">Ir para o conteúdo principal</a>
